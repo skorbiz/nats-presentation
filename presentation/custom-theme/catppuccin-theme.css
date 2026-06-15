@@ -100,18 +100,22 @@ section.has-light-background, section.has-light-background h1, section.has-light
 
 .reveal h1 {
   font-size: var(--r-heading1-size);
+  color: #cba6f7; /* Mauve */
 }
 
 .reveal h2 {
   font-size: var(--r-heading2-size);
+  color: #89b4fa; /* Blue */
 }
 
 .reveal h3 {
   font-size: var(--r-heading3-size);
+  color: #f5c2e7; /* Pink */
 }
 
 .reveal h4 {
   font-size: var(--r-heading4-size);
+  color: #fab387; /* Peach */
 }
 
 .reveal h1 {

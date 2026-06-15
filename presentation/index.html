@@ -70,6 +70,18 @@
         max-height: 78vh;
         object-fit: contain;
       }
+
+      /* Mermaid diagram styling */
+      .reveal .mermaid {
+        max-width: 100%;
+        margin: 0 auto;
+      }
+
+      .reveal .mermaid svg {
+        max-width: 100%;
+        height: auto;
+        max-height: 60vh;
+      }
     </style>
   </head>
   <body>
@@ -212,14 +224,32 @@
           </section>
         </section>
 
-        <section data-markdown>
-          <textarea data-template>
-            # NATS Core Message Patterns
-            
-            - **Pub/Sub** - Publish and subscribe pattern
-            - **Request/Reply** - Synchronous communication
-            - **Queue Groups** - Competing consumers
-          </textarea>
+        <section>
+          <section data-markdown>
+            <textarea data-template>
+              # NATS Core Message Patterns
+              
+              - **Pub/Sub** - Publish and subscribe pattern
+              - **Request/Reply** - Synchronous communication
+              - **Queue Groups** - Competing consumers
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Under the Hood
+              
+              **Message Structure:**
+              - **Subject**: The routing address (e.g., `orders.created`)
+              - **Payload**: Binary data (bytes), any format you choose
+              - **Reply-To**: Optional inbox subject for responses
+              - **Headers**: Optional key-value metadata (similar to HTTP headers)
+              
+              **Routing:**
+              - **Request/Reply**: Uses unique inbox subject + reply-to field              
+              - **Queue Groups**: Server randomly picks ONE subscriber from the group              
+            </textarea>
+          </section>
         </section>
 
         <section data-markdown>
@@ -239,11 +269,10 @@
             ```
           </textarea>
         </section>
-
         <section>
           <section data-markdown>
             <textarea data-template>
-              # More JetStream Patterns
+              ## More JetStream Patterns
             </textarea>
           </section>
 
@@ -335,6 +364,35 @@
               ```
             </textarea>
           </section>
+
+
+          <section>
+          <h2>Queue Groups with JetStream</h2>
+          <div class="mermaid">
+            graph LR
+              P[Publisher]
+              S[Subject: orders.*]
+              ST[Stream: ORDERS]
+              C1[Consumer: billing]
+              C2[Consumer: analytics]
+              C3[Consumer: audit]
+              
+              P -->|Publish| S
+              S -->|Match & Store| ST
+              ST -->|Replay from start| C1
+              ST -->|Only new| C2
+              ST -->|Last 7 days| C3
+              
+              style P fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+              style S fill:#fab387,stroke:#cdd6f4,color:#1e1e2e
+              style ST fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+              style C1 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+              style C2 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+              style C3 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+          </div>
+          <p style="font-size: 0.8em; margin-top: 1em;">Multiple consumers with different replay policies from same stream</p>
+        </section>
+
         </section>
 
         <section>
@@ -427,6 +485,35 @@
             </textarea>
           </section>
 
+          <section>
+            <h2>Cluster Diagram</h2>
+            <div class="mermaid">
+              graph LR
+                C1[Client 1]
+                C2[Client 2]
+                C3[Client 3]
+                S1[NATS Server 1]
+                S2[NATS Server 2]
+                S3[NATS Server 3]
+                
+                C1 -.-> S1
+                C2 -.-> S2
+                C3 -.-> S3
+                
+                S1 <--> S2
+                S2 <--> S3
+                S3 <--> S1
+                
+                style S1 fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+                style S2 fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+                style S3 fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+                style C1 fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+                style C2 fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+                style C3 fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+            </div>
+            <p style="font-size: 0.8em; margin-top: 1em;">Full mesh topology: All servers connect to each other</p>
+          </section>
+
           <section data-markdown>
             <textarea data-template>
               ## JetStream Cluster
@@ -446,15 +533,7 @@
 
           <section data-markdown>
             <textarea data-template>
-              ## Server Tags / Placement
-              
-              - Control where JetStream assets live (e.g., "edge," "cloud," "ssd," "region-a")
-            </textarea>
-          </section>
-
-          <section data-markdown>
-            <textarea data-template>
-            # Supercluster
+            ## Supercluster
             
             - Gateways connect clusters together
             - Clustering is for nearby servers
@@ -464,14 +543,91 @@
             >
           </section>
 
+          <section>
+            <h2>Supercluster Diagram</h2>
+            <div class="mermaid">
+              graph TB
+                subgraph "Cluster A (US-East)"
+                  A1[NATS Server A1]
+                  A2[NATS Server A2]
+                  A1 <--> A2
+                end
+                
+                subgraph "Cluster B (US-West)"
+                  B1[NATS Server B1]
+                  B2[NATS Server B2]
+                  B1 <--> B2
+                end
+                
+                subgraph "Cluster C (EU)"
+                  C1[NATS Server C1]
+                  C2[NATS Server C2]
+                  C1 <--> C2
+                end
+                
+                A1 -.Gateway.-> B1
+                B1 -.Gateway.-> C1
+                C1 -.Gateway.-> A1
+                
+                style A1 fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+                style A2 fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+                style B1 fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+                style B2 fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+                style C1 fill:#fab387,stroke:#cdd6f4,color:#1e1e2e
+                style C2 fill:#fab387,stroke:#cdd6f4,color:#1e1e2e
+            </div>
+            <p style="font-size: 0.8em; margin-top: 1em;">Gateways connect clusters across regions</p>
+          </section>
+
           <section data-markdown>
             <textarea data-template>
-            # Leaf Nodes
+            ## Leaf Nodes
                         
             - Connect remote/edge NATS deployments into a larger system
             - Maintains local operation capability
           </textarea
             >
+          </section>
+
+          <section>
+            <h2>Leaf Nodes Diagram</h2>
+            <div class="mermaid">
+              graph TB
+                subgraph "Central Cluster"
+                  S1[NATS Server 1]
+                  S2[NATS Server 2]
+                  S1 <--> S2
+                end
+                
+                subgraph "Edge Location 1"
+                  L1[Leaf Node 1]
+                  D1[Device 1]
+                  D2[Device 2]
+                  D1 --> L1
+                  D2 --> L1
+                end
+                
+                subgraph "Edge Location 2"
+                  L2[Leaf Node 2]
+                  D3[Device 3]
+                  D4[Device 4]
+                  D3 --> L2
+                  D4 --> L2
+                end
+                
+                L1 -.Leaf Connection.-> S1
+                L2 -.Leaf Connection.-> S2
+                
+                style S1 fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+                style S2 fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+                style L1 fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+                style L2 fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+                style D1 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+                style D2 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+                style D3 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+                style D4 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+            </div>
+            <p style="font-size: 0.8em; margin-top: 1em;">Leaf nodes operate independently but connect to central cluster</p>
           </section>
         </section>
 
@@ -574,6 +730,374 @@
 
         <section data-markdown>
           <textarea data-template>
+            ## Change Data Capture with Debezium
+            
+            <ul style="list-style: none;">
+            <li>
+            
+            **What is Debezium?**
+            - Open-source platform that captures database changes (INSERT, UPDATE, DELETE)
+            - Streams changes as events in real-time (native NATS JetStream support)
+            
+            </li>
+            <li>
+            
+            **Supported Databases:**
+            - PostgreSQL, MySQL, MongoDB, SQL Server, Oracle, DB2, Cassandra
+            
+            </li>
+            <li>
+            
+            **Requirements:**
+            - PostgreSQL: Logical replication enabled (`wal_level = logical`)
+            - SQL Server: CDC (Change Data Capture) configured
+            - MySQL: Binary logging with row-level format
+            
+            </li>
+            </ul>
+          </textarea>
+        </section>
+
+        <section>
+          <section data-markdown>
+            <textarea data-template>
+              # Do it yourself time
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+            ## Install Nats
+            
+            ```bash
+            # Nats server
+            curl -fsSL https://binaries.nats.dev/nats-io/nats-server/v2@v2.11.6 | sh
+
+            # Nats CLI
+            curl -LO https://github.com/nats-io/natscli/releases/download/v0.4.0/nats-0.4.0-amd64.deb
+            sudo dpkg -i nats-0.4.0-amd64.deb
+
+            nats --version
+            ```
+          </textarea
+            >
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+            ## 1. Start NATS Server Locally 
+            ```bash            
+            nats-server -js # Start with JetStream enabled
+            ```
+
+            ### With optional configuration file
+            ```bash            
+            cat <<EOL > nats.conf
+            port: 4222
+            http_port: 8222
+            jetstream {
+              store_dir: "/tmp/jetstream"
+              max_mem_store: 1Gb
+              max_file_store: 10Gb
+            }
+            EOL
+
+            nats-server -c nats.conf
+            ```
+
+          </textarea
+            >
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+
+            ## 2. Core NATS - Pub/Sub
+            ```bash
+            # Terminal 1: Subscribe
+            nats sub "demo.messages"
+            
+            # Terminal 2: Publish
+            nats pub demo.messages "Hello NATS!"
+            nats pub demo.messages "Message 2"
+            ```
+          </textarea
+            >
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+            ## 3. Request/Reply Pattern
+            ```bash
+            # Terminal 1: Start a replier service
+            nats reply "status.check" "Service is running!"
+            
+            # Terminal 2: Send request
+            nats request status.check ""
+            ```
+            
+            ## 4. Wildcard Subscriptions
+            ```bash
+            # Subscribe to multiple subjects
+            nats sub "orders.*"
+            
+            # Then publish to different subjects
+            nats pub orders.created '{"id": 1}'
+            nats pub orders.paid '{"id": 1}'
+            nats pub orders.shipped '{"id": 1}'
+            ```
+          </textarea
+            >
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+            ## 5. JetStream - Create Stream
+            ```bash
+            # Create a stream
+            nats stream add ORDERS \
+              --subjects "orders.*" \
+              --storage file \
+              --retention limits \
+              --max-msgs=-1 \
+              --max-age=1h
+            
+            # Publish to the stream
+            nats pub orders.created '{"id": 123, "total": 99.99}'
+            nats pub orders.paid '{"id": 123}'
+            
+            # Check stream info
+            nats stream info ORDERS
+            nats stream view ORDERS
+            ```
+          </textarea
+            >
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+            ## 6. JetStream - Create Consumer
+            ```bash
+            # Create a consumer (replay from beginning)
+            nats consumer add ORDERS billing \
+              --deliver all \
+              --ack explicit \
+              --pull
+            
+            # Pull messages
+            nats consumer next ORDERS billing --count 10
+            
+            # Create another consumer (only new messages)
+            nats consumer add ORDERS analytics \
+              --deliver new \
+              --ack none \
+              --pull
+            ```
+          </textarea
+            >
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+            ## 8. Monitoring & Debugging
+            ```bash
+            # Server info
+            nats server info
+            nats server report connections
+            
+            # List all streams
+            nats stream ls
+            
+            # List all consumers for a stream
+            nats consumer ls ORDERS
+            
+            # Check HTTP monitoring endpoint
+            curl http://localhost:8222/varz
+            
+            # Account info
+            nats account info
+            ```
+
+          </textarea
+            >
+          </section>
+        </section>
+
+        <section>
+          <section data-markdown>
+            <textarea data-template>
+              # Python examples
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## 1. Publisher (Core NATS)
+              ```python
+import asyncio
+import nats
+
+async def main():
+    nc = await nats.connect("nats://localhost:4222")
+    
+    # Publish 5 messages
+    for i in range(1, 6):
+        message = f"Hello from Python - Message {i}"
+        await nc.publish("demo.messages", message.encode())
+        print(f"Published: {message}")
+        await asyncio.sleep(1)
+    
+    await nc.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## 2. Subscriber (Core NATS)
+              ```python
+import asyncio
+import nats
+
+async def message_handler(msg):
+    data = msg.data.decode()
+    print(f"Received: {data}")
+
+async def main():
+    nc = await nats.connect("nats://localhost:4222")
+    
+    # Subscribe to subject
+    await nc.subscribe("demo.messages", cb=message_handler)
+    print("Subscribed to 'demo.messages'")
+    
+    await asyncio.Future()  # Run forever
+
+if __name__ == "__main__":
+    asyncio.run(main())
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## 3. Request (Request/Reply)
+              ```python
+import asyncio
+import nats
+
+async def main():
+    nc = await nats.connect("nats://localhost:4222")
+    
+    # Send request and wait for reply
+    response = await nc.request(
+        "status.check", 
+        b"ping", 
+        timeout=2.0
+    )
+    print(f"Response: {response.data.decode()}")
+    
+    await nc.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## 4. Reply Service (Request/Reply)
+              ```python
+import asyncio
+import nats
+
+async def request_handler(msg):
+    print(f"Received request: {msg.data.decode()}")
+    # Send reply
+    await msg.respond(b"pong")
+
+async def main():
+    nc = await nats.connect("nats://localhost:4222")
+    
+    await nc.subscribe("status.check", cb=request_handler)
+    print("Reply service listening...")
+    
+    await asyncio.Future()  # Run forever
+
+if __name__ == "__main__":
+    asyncio.run(main())
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## 5. JetStream Consumer
+              ```python
+import asyncio
+import nats
+
+async def main():
+    nc = await nats.connect("nats://localhost:4222")
+    js = nc.jetstream()
+    
+    # Create pull consumer
+    consumer = await js.pull_subscribe(
+        "orders.*", 
+        "order-processor"
+    )
+    
+    # Fetch and process messages
+    msgs = await consumer.fetch(10)
+    for msg in msgs:
+        print(f"Got: {msg.data.decode()}")
+        await msg.ack()
+    
+    await nc.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## 6. JetStream Stream Publisher
+              ```python
+import asyncio
+import nats
+from nats.js.api import StorageType
+
+async def main():
+    nc = await nats.connect("nats://localhost:4222")
+    js = nc.jetstream()
+    
+    # Create stream
+    await js.add_stream(
+        name="ORDERS",
+        subjects=["orders.*"],
+        storage=StorageType.FILE
+    )
+    
+    # Publish to stream
+    ack = await js.publish("orders.created", b'{"id": 123}')
+    print(f"Published with seq: {ack.seq}")
+    
+    await nc.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+              ```
+            </textarea>
+          </section>
+        </section>
+
+        <section data-markdown>
+          <textarea data-template>
             # Learn More
             
             **Documentation:**
@@ -596,12 +1120,36 @@
     <script src="reveal.js/dist/reveal.js"></script>
     <script src="reveal.js/plugin/markdown/markdown.js"></script>
     <script src="reveal.js/plugin/highlight/highlight.js"></script>
-    <script>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+      mermaid.initialize({ 
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+          darkMode: true,
+          background: '#1e1e2e',
+          primaryColor: '#cba6f7',
+          primaryTextColor: '#cdd6f4',
+          primaryBorderColor: '#89b4fa',
+          lineColor: '#89b4fa',
+          secondaryColor: '#f5c2e7',
+          tertiaryColor: '#fab387',
+          noteBkgColor: '#313244',
+          noteTextColor: '#cdd6f4'
+        }
+      });
+
       Reveal.initialize({
         hash: true,
         center: true,
         transition: "slide",
         plugins: [RevealMarkdown, RevealHighlight],
+      });
+
+      Reveal.on('ready', () => {
+        mermaid.run({
+          querySelector: '.mermaid'
+        });
       });
     </script>
   </body>
