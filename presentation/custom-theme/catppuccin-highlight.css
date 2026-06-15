@@ -1,0 +1,151 @@
+/*
+ * Catppuccin Mocha theme for highlight.js
+ * Based on https://github.com/catppuccin/catppuccin
+ */
+
+.reveal pre code.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 1em;
+  background: #181825;
+}
+
+.reveal code.hljs {
+  padding: 3px 5px;
+}
+
+.hljs {
+  color: #cdd6f4;
+  background: #181825;
+}
+
+/* Base/Text */
+.hljs-subst {
+  color: #cdd6f4;
+}
+
+/* Keywords - Mauve */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-deletion,
+.hljs-template-tag {
+  color: #cba6f7;
+}
+
+/* Strings - Green */
+.hljs-string,
+.hljs-doctag,
+.hljs-regexp {
+  color: #a6e3a1;
+}
+
+/* Functions/Classes - Blue */
+.hljs-title,
+.hljs-section,
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-class .hljs-title,
+.hljs-title.function_ {
+  color: #89b4fa;
+}
+
+/* Numbers/Literals - Peach */
+.hljs-number,
+.hljs-literal,
+.hljs-variable.constant_,
+.hljs-symbol {
+  color: #fab387;
+}
+
+/* Attributes - Yellow */
+.hljs-attribute,
+.hljs-attr {
+  color: #f9e2af;
+}
+
+/* Types/Tags - Yellow */
+.hljs-type,
+.hljs-tag {
+  color: #f9e2af;
+}
+
+/* Parameters/Variables - Maroon */
+.hljs-params,
+.hljs-variable,
+.hljs-template-variable {
+  color: #eba0ac;
+}
+
+/* Comments - Surface2 */
+.hljs-comment,
+.hljs-quote {
+  color: #7f849c;
+  font-style: italic;
+}
+
+/* Meta/Preprocessor - Pink */
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+  color: #f5c2e7;
+}
+
+/* Names - Flamingo */
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #f2cdcd;
+}
+
+/* Special - Teal */
+.hljs-bullet,
+.hljs-code,
+.hljs-addition,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: #94e2d5;
+}
+
+/* Links - Sapphire */
+.hljs-link {
+  color: #74c7ec;
+  text-decoration: underline;
+}
+
+/* Emphasis */
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+/* Language specifics */
+.language-bash .hljs-built_in,
+.language-shell .hljs-built_in {
+  color: #f38ba8;
+}
+
+.language-json .hljs-attr {
+  color: #89b4fa;
+}
+
+.language-yaml .hljs-attr {
+  color: #89b4fa;
+}
+
+.language-css .hljs-selector-tag,
+.language-css .hljs-selector-id,
+.language-css .hljs-selector-class {
+  color: #f2cdcd;
+}
+
+.language-xml .hljs-tag,
+.language-html .hljs-tag {
+  color: #cba6f7;
+}
+
+.language-xml .hljs-name,
+.language-html .hljs-name {
+  color: #f38ba8;
+}

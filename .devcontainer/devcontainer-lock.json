@@ -1,0 +1,14 @@
+{
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1.8": {
+      "version": "1.8.0",
+      "resolved": "ghcr.io/devcontainers/features/docker-outside-of-docker@sha256:7814faedf1aa581022e365d55bc0c8225f1aa9500c703c5585842f9a790a9701",
+      "integrity": "sha256:7814faedf1aa581022e365d55bc0c8225f1aa9500c703c5585842f9a790a9701"
+    },
+    "ghcr.io/prulloac/devcontainer-features/pre-commit:1.0.3": {
+      "version": "1.0.3",
+      "resolved": "ghcr.io/prulloac/devcontainer-features/pre-commit@sha256:cfa0edea30d7b3e530bf1f3b9b3103db5ca123479acaeb382ef29a57e354f947",
+      "integrity": "sha256:cfa0edea30d7b3e530bf1f3b9b3103db5ca123479acaeb382ef29a57e354f947"
+    }
+  }
+}

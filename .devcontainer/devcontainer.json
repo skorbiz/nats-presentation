@@ -1,0 +1,75 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
+{
+  "name": "Mezcada default devcontainer",
+  "dockerFile": "Dockerfile",
+  "context": "../..",
+  // Use Docker outside of Docker feature to connect to host Docker daemon
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1.8": {},
+    "ghcr.io/prulloac/devcontainer-features/pre-commit:1.0.3": {}
+  },
+  "remoteUser": "dev",
+  "containerUser": "root",
+  "initializeCommand": "bash -lc 'mkdir -p \"${HOME}/.ssh\" \"${HOME}/.config/gh\" \"${HOME}/.copilot\" && chmod 700 \"${HOME}/.ssh\" \"${HOME}/.config/gh\" \"${HOME}/.copilot\"'",
+
+  // Performance optimization: use Docker volume for node_modules to avoid Windows filesystem overhead
+  // NOTE: The volume 'mezcada-pages-node-modules' will persist node_modules across container rebuilds and even after the container is removed.
+  // If you need to fully reset your dependencies (e.g., after major package.json changes or troubleshooting), run:
+  //    docker volume rm mezcada-pages-node-modules
+  "mounts": [
+    // Mount SSH keys from host to container
+    "source=${localEnv:HOME}/.ssh,target=/home/dev/.ssh,type=bind",
+    // Mount GitHub CLI config so gh auth session persists across container rebuilds
+    "source=${localEnv:HOME}/.config/gh,target=/home/dev/.config/gh,type=bind",
+    // Mount Copilot CLI config for auth token and history persistence across container rebuilds
+    "source=${localEnv:HOME}/.copilot,target=/home/dev/.copilot,type=bind",
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "github.copilot.enable": {
+          "*": true
+        }
+      },
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "humao.rest-client",
+        "streetsidesoftware.code-spell-checker",
+        "GitHub.copilot-chat",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.vscode-python-envs",
+        "njpwerner.autodocstring",
+        "redhat.vscode-xml",
+        "openai.chatgpt",
+        "DavidAnson.vscode-markdownlint",
+        "esbenp.prettier-vscode", // Prettier formatter
+        "dbaeumer.vscode-eslint", // ESLint linter
+        "tamasfe.even-better-toml", // TOML support
+        "charliermarsh.ruff", // Ruff linter
+        "meta.pyrefly", // Pyrefly type checker
+        "mermaidchart.vscode-mermaid-chart", // Mermaid diagram support
+        "vunguyentuan.vscode-css-variables", // CSS variable support
+        "ggfincke.vsc-mdx-preview" // MDX preview support and syntax highlighting
+      ]
+    }
+  },
+  "remoteEnv": {
+    "PATH": "${containerWorkspaceFolder}/node_modules/.bin:${containerEnv:PATH}"
+  },
+  "runArgs": [
+    "--network=host"
+    // puts the container in the hosts network stack.
+    // Done so we can easily acccess docker containers running on the host machine from the devcontainer
+    // might not be best practice, so could change in the feauture
+    // see https://www.dasblinkenlichten.com/docker-networking-101-host-mode/ for some potential issues
+  ],
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Web app",
+      "onAutoForward": "openBrowser"
+    }
+  }
+}

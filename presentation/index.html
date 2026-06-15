@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Introduction to NATS</title>
+    <link rel="stylesheet" href="reveal.js/dist/reset.css" />
+    <link rel="stylesheet" href="reveal.js/dist/reveal.css" />
+    <!-- <link rel="stylesheet" href="reveal.js/dist/theme/black.css" /> -->
+    <link rel="stylesheet" href="custom-theme/catppuccin-theme.css" />
+    <link rel="stylesheet" href="custom-theme/catppuccin-highlight.css" />
+
+    <style>
+      .reveal {
+        font-size: 28px;
+      }
+
+      .reveal p,
+      .reveal li {
+        line-height: 1.4;
+      }
+
+      .reveal ul,
+      .reveal ol {
+        text-align: left;
+        margin-top: 0.4em;
+      }
+
+      .reveal ul li,
+      .reveal ol li {
+        line-height: 1.45;
+        margin: 0 0 0.55em 0;
+      }
+
+      .reveal ul li:last-child,
+      .reveal ol li:last-child {
+        margin-bottom: 0;
+      }
+
+      .reveal .small-note {
+        font-size: 0.7em;
+      }
+
+      .reveal .small-text {
+        font-size: 0.5em;
+      }
+
+      .reveal .image-notes {
+        gap: 1.2rem;
+        align-items: center;
+      }
+
+      .reveal .image-notes .image-panel {
+        flex: 0 0 62%;
+        min-width: 0;
+      }
+
+      .reveal .image-notes .notes-panel {
+        flex: 1;
+        text-align: left;
+        font-size: 0.9em;
+      }
+
+      .reveal .image-notes .notes-panel h4 {
+        margin: 0 0 0.5em 0;
+      }
+
+      .reveal .image-notes img {
+        width: 100%;
+        max-height: 78vh;
+        object-fit: contain;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides">
+        <!-- Intro Slide -->
+        <section>
+          <h1>NATS</h1>
+          <h3>A Message Broker Introduction</h3>
+        </section>
+
+        <section data-markdown>
+          <textarea data-template>
+            # What is NATS?
+            
+            - Messaging broker / message server
+            - Open Source 
+            - Backed by Linux Cloud Native Foundation
+            - Mainly developed by Synadia (company founded by the original creator)
+            
+            - **Key Features:**
+              - Small, fast message broker with simple subject-based routing
+              - Supports pub/sub, request/reply, queue groups
+              - JetStream adds persistence and replay
+              - Easy local developer experience
+          </textarea>
+        </section>
+
+        <section data-markdown class="small-text">
+          <textarea data-template>
+            | General messaging term  | NATS / NATS JetStream                                                         | RabbitMQ                                                    | ROS / ROS 2                                       |
+            | ----------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------- |
+            | Broker / message server | NATS server                                                                   | RabbitMQ broker                                             | ROS master in ROS 1 / DDS domain in ROS 2         |
+            | Address                 | Subject                                                                       | Exchange + routing key                                      | Topic name                                        |
+            | Topic                   | Subject                                                                       | Topic exchange routing key pattern                          | Topic                                             |
+            | Publisher               | Publisher                                                                     | Producer / publisher                                        | Publisher node                                    |
+            | Subscriber              | Subscriber                                                                    | Consumer                                                    | Subscriber node                                   |
+            | Message                 | Message                                                                       | Message                                                     | Message                                           |
+            | Payload schema          | App-defined / JSON Schema / Protobuf                                          | App-defined / JSON Schema / Protobuf / Avro                 | `.msg` file                                       |
+            | Request/reply           | NATS request/reply                                                            | RPC pattern with reply queue                                | Service                                           |
+            | Long-running request    | App-specific pattern                                                          | App-specific pattern                                        | Action                                            |
+            | Queue / work queue      | Queue group / JetStream consumer                                              | Queue                                                       | Not a direct match                                |
+            | Competing consumers     | Queue group / shared JetStream consumer                                       | Multiple consumers on same queue                            | Not typical; subscribers normally each get a copy |
+            | Durable subscription    | JetStream durable consumer                                                    | Durable queue / durable consumer state                      | Not typically                                     |
+            | Persistence             | JetStream stream                                                              | Durable queue + persistent messages                         | Usually not broker-persistent                     |
+            | Replay old messages     | JetStream consumer replay                                                     | Limited; usually only unacked/queued messages               | Latched topics                                    |
+            | Retention               | JetStream retention policy                                                    | Queue TTL / max length / durability settings                | QoS durability in ROS 2, roughly                  |
+            | Dead letter             | App pattern / separate stream                                                 | Dead-letter exchange / dead-letter queue                    | App pattern                                       |
+            | Wildcard: one token     | `*`                                                                           | `*` in topic exchange                                       | Not normally used this way                        |
+            | Wildcard: many tokens   | `>`                                                                           | `#` in topic exchange                                       | Not normally used this way                        |
+            | Service discovery       | NATS service API / app convention                                             | Management API / app convention                             | Built-in ROS graph                                |
+            | CLI                     | Yes                                                                           | No, Management UI                                           | Yes                                               |
+          </textarea>
+        </section>
+
+        <section data-markdown>
+          <textarea data-template>
+            # NATS vs. NATS JetStream
+
+            **Core NATS:** 
+            
+            Messages are live only
+
+            **JetStream:**
+
+            Messages are stored if their subject matches a stream
+
+            ```bash
+            Example mental model:
+
+            RabbitMQ:
+            producer -> exchange -> binding -> queue -> consumer
+
+            NATS:
+            publisher -> subject -> subscriber
+
+            NATS + JetStream:
+            publisher -> subject -> stream -> consumer
+            ```
+
+          </textarea>
+        </section>
+
+        <section data-markdown>
+          <textarea data-template>
+            # Subjects
+
+            **A subject is the address of a message**
+
+            ```bash
+            machine.status.changed
+            machine.alarm.raised
+            orders.created
+            orders.paid
+            service.machine.get-status
+            ```
+
+            **Wildcards:**
+            ```bash
+            *  = one token
+            >  = rest of subject
+            ```
+
+            **Examples:**
+            ```bash
+            machine.*.changed
+            machine.>
+            orders.*
+            ```
+          </textarea>
+        </section>
+
+        <section>
+          <section data-markdown>
+            <textarea data-template>
+              # NATS is Message Agnostic
+              
+              - NATS does not care about message format
+              - No built-in schema registry or format
+              - Common formats: JSON, Protobuf, etc.
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              **JSON:**
+              - Human readable, good for debugging
+              - Larger message size, less efficient
+              - No strict schema, can lead to inconsistencies
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              **Protobuf:**
+              - Compact binary format, more efficient
+              - Requires schema definition, less flexible
+              - Better for high-performance applications
+            </textarea>
+          </section>
+        </section>
+
+        <section data-markdown>
+          <textarea data-template>
+            # NATS Core Message Patterns
+            
+            - **Pub/Sub** - Publish and subscribe pattern
+            - **Request/Reply** - Synchronous communication
+            - **Queue Groups** - Competing consumers
+          </textarea>
+        </section>
+
+        <section data-markdown>
+          <textarea data-template>
+            # JetStream
+            ## Persistence and Replay
+            
+            ```text
+            Subject:
+            orders.created
+
+            Stream:
+            ORDERS captures orders.*
+
+            Consumer:
+            billing-service reads from ORDERS
+            ```
+          </textarea>
+        </section>
+
+        <section>
+          <section data-markdown>
+            <textarea data-template>
+              # More JetStream Patterns
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Persistence Tuning
+              
+              - Streams control storage: file/memory, retention policy, max age, max messages, replicas, discard policy
+              
+              ```bash
+              nats stream add
+              nats stream info
+              nats stream edit
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Consumer Types
+              
+              **Push Consumer:**
+              - Server pushes messages to subscriber
+              - Like traditional pub/sub
+              
+              **Pull Consumer:**
+              - Client requests messages on demand
+              - Better for batch processing or rate limiting
+              - More control over consumption rate
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Delivery/Replay Policies
+              
+              - **All** - Deliver all messages from the beginning
+              - **Last** - Start with the last message
+              - **New** - Only new messages (default)
+              - **By Sequence** - Start from specific message sequence number
+              - **By Time** - Start from specific timestamp
+              
+              Great for replaying events, debugging, or catching up!
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Multiple Consumers
+              
+              **Same stream, different consumers:**
+              - Each consumer has its own position/state
+                - billing-service starts from beginning
+                - analytics-service only reads new messages
+                - audit-service replays last 7 days
+              
+              All reading from the same stream independently!
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Acknowledgment Modes
+              
+              - **Explicit Ack** - Manual acknowledgment (default)
+              - **None** - No acknowledgment needed
+              - **All** - Acknowledge all up to this message
+              
+              **Redelivery:**
+              - Unacknowledged messages are redelivered
+              - Configurable max delivery attempts
+              - Can route to dead-letter stream
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Queue Groups with JetStream
+              
+              - Multiple instances of same consumer
+              - Load balancing across instances
+              - Only one instance processes each message
+              - Automatic failover if instance dies
+              
+              ```bash
+              # Multiple workers sharing the workload
+              nats consumer add --pull --filter orders.* \
+                --deliver all --max-deliver 3
+              ```
+            </textarea>
+          </section>
+        </section>
+
+        <section>
+          <section data-markdown>
+            <textarea data-template>
+              # Additional Nats/JetStream Features
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Key-Value Store
+              
+              - JetStream-backed persistent buckets for config, state, feature flags, and other patterns
+              
+              ```bash
+              nats kv add SETTINGS
+              nats kv put SETTINGS app.mode dev
+              nats kv watch SETTINGS
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Object Store
+              
+              - For larger blobs/files, also built on JetStream
+              - Think "bucket for objects," not normal message payloads
+              
+              ```bash
+              nats object add FILES
+              nats object put FILES ./file.bin
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Powerful CLI
+              
+              NATS has an excellent command-line tool for operations and development
+              
+              ```bash
+              # Publish and subscribe
+              nats pub orders.created '{"id": 123}'
+              nats sub "orders.*"
+              
+              # Request/Reply
+              nats request status.check ''
+              
+              # Stream and consumer management
+              nats stream ls
+              nats consumer ls ORDERS
+              
+              # Monitoring
+              nats server report connections
+              nats account info
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Services / Micro API
+              
+              - Gives request/reply services discoverability
+              
+              ```bash
+              nats micro ls
+              nats micro info "service"
+              ```
+            </textarea>
+          </section>
+        </section>
+
+        <section>
+          <section data-markdown>
+            <textarea data-template>
+              # NATS Topology
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Cluster
+              
+              - Multiple NATS servers form a full mesh for availability and scale
+              - Clients connect to any server
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## JetStream Cluster
+              
+              - Persistent streams can be replicated with Raft
+              - A 3-node cluster needs quorum (at least 2 nodes available) to keep writing
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Server Tags / Placement
+              
+              - Control where JetStream assets live (e.g., "edge," "cloud," "ssd," "region-a")
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Server Tags / Placement
+              
+              - Control where JetStream assets live (e.g., "edge," "cloud," "ssd," "region-a")
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+            # Supercluster
+            
+            - Gateways connect clusters together
+            - Clustering is for nearby servers
+            - Gateways join clusters into superclusters
+            
+          </textarea
+            >
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+            # Leaf Nodes
+                        
+            - Connect remote/edge NATS deployments into a larger system
+            - Maintains local operation capability
+          </textarea
+            >
+          </section>
+        </section>
+
+        <section>
+          <section data-markdown>
+            <textarea data-template>
+              # Production Considerations
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Performance
+              
+              **Benchmarks: (what the internet says)**
+              - 10M+ messages/sec on commodity hardware
+              - Low latency (microseconds for Core NATS)
+              - Minimal memory footprint (~20MB base)
+              
+              **Why So Fast?**
+              - Written in Go
+              - Zero-copy message routing
+              - No message transformation             
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Client Libraries
+              
+              **Officially Supported:**
+              - Go, Java, JavaScript/TypeScript, Python, C#/.NET
+              - C, Ruby, Rust, Elixir
+              
+              **Community:**
+              - Swift, Kotlin, PHP, Dart, and more
+              
+              All with similar APIs - easy to switch between languages!
+              
+              ```bash
+              # Example: Python
+              pip install nats-py
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Security Basics
+              
+              **Authentication:**
+              - Username/password
+              - JWT tokens (recommended for production)
+              - NKeys (public-key cryptography)
+              
+              **Authorization:**
+              - Subject-based permissions
+              - Fine-grained pub/sub controls per user/account
+              
+              **Encryption:**
+              - TLS for client-server and server-server connections
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Multi-Tenancy
+              
+              **Accounts:**
+              - Isolated namespaces within same NATS cluster
+              - Separate subjects, streams, and permissions
+              - Cross-account communication via exports/imports
+                            
+              ```bash
+              nats account info
+              ```
+            </textarea>
+          </section>
+
+          <section data-markdown>
+            <textarea data-template>
+              ## Monitoring & Observability
+              
+              **Built-in:**
+              - HTTP monitoring endpoints (`/varz`, `/connz`, `/subsz`)
+              - Prometheus metrics exporter
+              - System events and advisories
+              
+              **OpenTelemetry Compliant:**
+              - Native OTEL tracing support
+              - Integrates with Jaeger, Zipkin, etc.
+              - Distributed tracing across services
+              
+              ```bash
+              nats server report jetstream
+              ```
+            </textarea>
+          </section>
+        </section>
+
+        <section data-markdown>
+          <textarea data-template>
+            # Learn More
+            
+            **Documentation:**
+            
+            [https://docs.nats.io/nats-concepts/overview](https://docs.nats.io/nats-concepts/overview)
+            
+            **The examples:**
+
+            [poc](https://jensen-group.ghe.com/Mezcada/mezcada/tree/main/poc/johl-nats)
+
+            **Questions?**
+
+
+
+          </textarea>
+        </section>
+      </div>
+    </div>
+
+    <script src="reveal.js/dist/reveal.js"></script>
+    <script src="reveal.js/plugin/markdown/markdown.js"></script>
+    <script src="reveal.js/plugin/highlight/highlight.js"></script>
+    <script>
+      Reveal.initialize({
+        hash: true,
+        center: true,
+        transition: "slide",
+        plugins: [RevealMarkdown, RevealHighlight],
+      });
+    </script>
+  </body>
+</html>
