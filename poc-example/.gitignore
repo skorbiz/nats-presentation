@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+*.egg-info/
+
+# Test outputs
+profiles/
+
+# pytest
+.pytest_cache/
+
+# AsyncAPI generated docs (if/when static generation works)
+docs/
+docs_generated/
+asyncapi-*.0.0.yaml # Temporary downgraded specs
+
+# AsyncAPI generated models
+generated_models/
+gen_model/
+gen_schemas/
+gen_docs/
+gen_client/
+
+# uv
+.python-version
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+.DS_Store

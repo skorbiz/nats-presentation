@@ -1,0 +1,479 @@
+services:
+  nats:
+    build:
+      context: .
+      dockerfile: Dockerfile.nats
+    ports:
+      - '4222:4222' # NATS client connections
+      - '8222:8222' # HTTP monitoring
+      - '6222:6222' # Routing port for clustering
+      - '1883:1883' # MQTT protocol
+      - '8080:8080' # WebSocket protocol
+    # Healthcheck disabled - NATS Server ready log is sufficient
+    # healthcheck:
+    #   test: ["CMD", "nats-server", "--signal", "ping"]
+    #   interval: 5s
+    #   timeout: 3s
+    #   retries: 3
+    #   start_period: 10s
+    networks:
+      - nats-network
+
+  subscriber:
+    image: natsio/nats-box:latest
+    depends_on:
+      nats:
+        condition: service_started
+    command: nats sub --server=nats://nats:4222 demo.messages
+    networks:
+      - nats-network
+
+  publisher:
+    image: natsio/nats-box:latest
+    depends_on:
+      nats:
+        condition: service_started
+    command: >
+      sh -c "
+        echo 'Publishing messages to subject: demo.messages';
+        for i in 1 2 3 4 5; do
+          echo 'Publishing message' $$i;
+          nats pub --server=nats://nats:4222 demo.messages 'Hello NATS - Message '$$i;
+          sleep 2;
+        done;
+        echo 'Done publishing. Keeping container alive...';
+        tail -f /dev/null
+      "
+    networks:
+      - nats-network
+
+  python-subscriber:
+    build: .
+    depends_on:
+      nats:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+    command: uv run python -m src.subscriber
+    networks:
+      - nats-network
+
+  python-publisher:
+    build: .
+    depends_on:
+      nats:
+        condition: service_started
+      python-subscriber:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+    command: >
+      sh -c "
+        echo 'Waiting for subscriber to be ready...';
+        sleep 2;
+        uv run python -m src.publisher
+      "
+    networks:
+      - nats-network
+
+  # Validated pub/sub with AsyncAPI schema enforcement
+  python-subscriber-validated:
+    build: .
+    depends_on:
+      nats:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+    command: uv run python -m src.subscriber_validated
+    networks:
+      - nats-network
+
+  python-publisher-validated:
+    build: .
+    depends_on:
+      nats:
+        condition: service_started
+      python-subscriber-validated:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+    command: >
+      sh -c "
+        echo 'Waiting for validated subscriber to be ready...';
+        sleep 2;
+        uv run python -m src.publisher_validated
+      "
+    networks:
+      - nats-network
+
+  # Request-Reply pattern
+  reply-service:
+    build: .
+    depends_on:
+      nats:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+    command: uv run python -m src.reply
+    networks:
+      - nats-network
+
+  request-client:
+    build: .
+    depends_on:
+      nats:
+        condition: service_started
+      reply-service:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+    command: >
+      sh -c "
+        echo 'Waiting for reply service to be ready...';
+        sleep 2;
+        uv run python -m src.request
+      "
+    networks:
+      - nats-network
+
+  # JetStream examples
+  jetstream-publisher:
+    build: .
+    depends_on:
+      nats:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+    command: uv run python -m src.jetstream_publisher
+    networks:
+      - nats-network
+
+  jetstream-consumer:
+    build: .
+    depends_on:
+      nats:
+        condition: service_started
+      jetstream-publisher:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+    command: >
+      sh -c "
+        echo 'Waiting for publisher to create stream...';
+        sleep 3;
+        uv run python -m src.jetstream_consumer
+      "
+    networks:
+      - nats-network
+
+  postgres-cdc:
+    image: postgres:16
+    profiles: ['cdc']
+    environment:
+      - POSTGRES_DB=inventory
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+    ports:
+      - '5432:5432'
+    # volumes:
+    #   - cdc-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d inventory']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    networks:
+      - nats-network
+
+  postgres-bootstrap:
+    image: postgres:16
+    profiles: ['cdc']
+    depends_on:
+      postgres-cdc:
+        condition: service_healthy
+    environment:
+      - PGPASSWORD=postgres
+    command: >
+      sh -c "
+        until psql postgresql://postgres:postgres@postgres-cdc:5432/inventory -c 'select 1' >/dev/null 2>&1; do
+          echo 'Waiting for postgres-cdc to accept SQL connections...';
+          sleep 2;
+        done;
+        psql postgresql://postgres:postgres@postgres-cdc:5432/inventory -c \"
+          CREATE TABLE IF NOT EXISTS public.inventory_items (
+            id SERIAL PRIMARY KEY,
+            sku TEXT NOT NULL UNIQUE,
+            quantity INTEGER NOT NULL,
+            unit_price NUMERIC(10, 2) NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+        \";
+        psql postgresql://postgres:postgres@postgres-cdc:5432/inventory -c \"
+          ALTER TABLE public.inventory_items
+          ADD COLUMN IF NOT EXISTS payload TEXT NOT NULL DEFAULT '';
+        \";
+        psql postgresql://postgres:postgres@postgres-cdc:5432/inventory -c \"
+          INSERT INTO public.inventory_items (sku, quantity, unit_price, payload)
+          VALUES ('SKU-000', 5, 0.99, '')
+          ON CONFLICT (sku) DO NOTHING;
+        \";
+      "
+    networks:
+      - nats-network
+
+  postgres-writer:
+    build: .
+    profiles: ['cdc']
+    depends_on:
+      postgres-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      - POSTGRES_WRITER_DSN=postgresql://postgres:postgres@postgres-cdc:5432/inventory
+      - WRITER_START_DELAY_SECONDS=${WRITER_START_DELAY_SECONDS:-8}
+      - WRITER_INSERT_INTERVAL_SECONDS=${WRITER_INSERT_INTERVAL_SECONDS:-5}
+      - WRITER_BATCH_SIZE=${WRITER_BATCH_SIZE:-1}
+      - WRITER_PAYLOAD_BYTES=${WRITER_PAYLOAD_BYTES:-0}
+    command: python -m src.postgres_writer
+    networks:
+      - nats-network
+
+  debezium-server:
+    image: quay.io/debezium/server:3.5.2.Final
+    profiles: ['cdc']
+    depends_on:
+      nats:
+        condition: service_started
+      postgres-bootstrap:
+        condition: service_completed_successfully
+    environment:
+      - DEBEZIUM_SINK_TYPE=nats-jetstream
+      - DEBEZIUM_SINK_NATS_JETSTREAM_URL=nats://nats:4222
+      - DEBEZIUM_SINK_NATS_JETSTREAM_CREATE_STREAM=true
+      - DEBEZIUM_SINK_NATS_JETSTREAM_STREAM_NAME=DEMO_CDC_STREAM
+      - DEBEZIUM_SINK_NATS_JETSTREAM_SUBJECTS=demo_cdc,demo_cdc.>
+      - DEBEZIUM_SINK_NATS_JETSTREAM_STORAGE=memory
+      - DEBEZIUM_SOURCE_CONNECTOR_CLASS=io.debezium.connector.postgresql.PostgresConnector
+      - DEBEZIUM_SOURCE_OFFSET_STORAGE_FILE_FILENAME=data/offsets.dat
+      - DEBEZIUM_SOURCE_OFFSET_FLUSH_INTERVAL_MS=0
+      - DEBEZIUM_SOURCE_DATABASE_HOSTNAME=postgres-cdc
+      - DEBEZIUM_SOURCE_DATABASE_PORT=5432
+      - DEBEZIUM_SOURCE_DATABASE_USER=postgres
+      - DEBEZIUM_SOURCE_DATABASE_PASSWORD=postgres
+      - DEBEZIUM_SOURCE_DATABASE_DBNAME=inventory
+      - DEBEZIUM_SOURCE_TOPIC_PREFIX=demo_cdc
+      - DEBEZIUM_SOURCE_SCHEMA_INCLUDE_LIST=public
+      - DEBEZIUM_SOURCE_TABLE_INCLUDE_LIST=public.inventory_items
+      - DEBEZIUM_SOURCE_PLUGIN_NAME=pgoutput
+      - DEBEZIUM_SOURCE_SLOT_NAME=demo_cdc_slot
+      - DEBEZIUM_SOURCE_PUBLICATION_NAME=demo_cdc_publication
+      - DEBEZIUM_SOURCE_PUBLICATION_AUTOCREATE_MODE=filtered
+      - DEBEZIUM_FORMAT_KEY=json
+      - DEBEZIUM_FORMAT_KEY_SCHEMAS_ENABLE=false
+      - DEBEZIUM_FORMAT_VALUE=json
+      - DEBEZIUM_FORMAT_VALUE_SCHEMAS_ENABLE=false
+      - DEBEZIUM_FORMAT_VALUE_DECIMAL_FORMAT=NUMERIC
+      - DEBEZIUM_TRANSFORMS=unwrap
+      - DEBEZIUM_TRANSFORMS_UNWRAP_TYPE=io.debezium.transforms.ExtractNewRecordState
+      - DEBEZIUM_TRANSFORMS_UNWRAP_DELETE_TOMBSTONE_HANDLING_MODE=rewrite
+      - DEBEZIUM_TRANSFORMS_UNWRAP_ADD_FIELDS=op,table,source.ts_ms
+    # volumes:
+    #   - debezium-data:/debezium/data
+    networks:
+      - nats-network
+
+  jetstream-publisher-raw:
+    build: .
+    profiles: ['cdc']
+    depends_on:
+      nats:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+      - RAW_JETSTREAM_STREAM_NAME=DEMO_RAW_STREAM
+      - RAW_JETSTREAM_SUBJECT=demo_raw.data
+      - RAW_JETSTREAM_SUBJECT_WILDCARD=demo_raw.>
+      - RAW_PUBLISHER_STATS_FILE=/tmp/raw_publisher_stats.json
+      - RAW_PUBLISHER_START_DELAY_SECONDS=${RAW_PUBLISHER_START_DELAY_SECONDS:-8}
+      - RAW_PUBLISHER_INTERVAL_SECONDS=${RAW_PUBLISHER_INTERVAL_SECONDS:-5}
+      - RAW_PUBLISHER_BATCH_SIZE=${RAW_PUBLISHER_BATCH_SIZE:-1}
+      - RAW_PUBLISHER_PAYLOAD_BYTES=${RAW_PUBLISHER_PAYLOAD_BYTES:-0}
+    command: python -m src.raw_jetstream_publisher
+    networks:
+      - nats-network
+
+  jetstream-consumer-cdc:
+    build: .
+    profiles: ['cdc']
+    depends_on:
+      nats:
+        condition: service_started
+      debezium-server:
+        condition: service_started
+      postgres-writer:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+      - JETSTREAM_STREAM_NAME=DEMO_CDC_STREAM
+      - JETSTREAM_CONSUMER_NAME=DEMO_CDC_CONSUMER
+      - JETSTREAM_SUBJECT_PATTERN=demo_cdc.>
+      - JETSTREAM_KEEP_RUNNING=true
+      - JETSTREAM_WAIT_FOR_STREAM=true
+      - JETSTREAM_CONSUMER_STATS_FILE=/tmp/jetstream_consumer_stats.json
+    command: >
+      sh -c "
+        echo 'Waiting for Debezium to create the CDC stream...';
+        sleep 12;
+        python -m src.jetstream_consumer
+      "
+    networks:
+      - nats-network
+
+  jetstream-consumer-raw:
+    build: .
+    profiles: ['cdc']
+    depends_on:
+      nats:
+        condition: service_started
+      jetstream-publisher-raw:
+        condition: service_started
+    environment:
+      - NATS_SERVER=nats://nats:4222
+      - JETSTREAM_STREAM_NAME=DEMO_RAW_STREAM
+      - JETSTREAM_CONSUMER_NAME=DEMO_RAW_CONSUMER
+      - JETSTREAM_SUBJECT_PATTERN=demo_raw.>
+      - JETSTREAM_KEEP_RUNNING=true
+      - JETSTREAM_WAIT_FOR_STREAM=true
+      - JETSTREAM_CONSUMER_STATS_FILE=/tmp/jetstream_consumer_stats.json
+    command: >
+      sh -c "
+        echo 'Waiting for raw publisher to create the stream...';
+        sleep 6;
+        python -m src.jetstream_consumer
+      "
+    networks:
+      - nats-network
+
+  jetstream-consumer-cli:
+    image: natsio/nats-box:latest
+    profiles: ['cdc']
+    depends_on:
+      nats:
+        condition: service_started
+      debezium-server:
+        condition: service_started
+      postgres-writer:
+        condition: service_started
+    command: >
+      sh -c "
+        echo 'Waiting for Debezium to create the CDC stream...';
+        until nats stream info --server=nats://nats:4222 DEMO_CDC_STREAM >/dev/null 2>&1; do
+          sleep 2;
+        done;
+        nats consumer add --server=nats://nats:4222 DEMO_CDC_STREAM DEMO_CDC_CONSUMER_CLI --pull --filter 'demo_cdc.>' --ack=explicit --deliver=all --defaults || true;
+        echo 'Fetching CDC messages with nats CLI...';
+        while true; do
+          echo 'CDC CLI: polling...';
+          output=$$(timeout 3s nats consumer next --server=nats://nats:4222 --ack --raw --count=1 --wait=2s DEMO_CDC_STREAM DEMO_CDC_CONSUMER_CLI 2>&1);
+          status=$$?;
+          normalized_output=$$(printf '%s' \"$$output\" | awk '{gsub(/}n{/,"}\n{"); gsub(/\]n/,"]\n"); print}');
+          if [ -n \"$$normalized_output\" ] && ! printf '%s' \"$$normalized_output\" | grep -q \"^Terminated$$\"; then
+            printf '%s' \"$$normalized_output\" | while IFS= read -r line || [ -n \"$$line\" ]; do
+              [ \"$$line\" = \"Terminated\" ] && continue;
+              printf 'CDC CLI: %s\n' \"$$line\";
+            done;
+          fi;
+          case \"$$status:$$output\" in
+            0:*)
+              ;;
+            124:*|137:*|143:*)
+              echo 'CDC CLI: poll timed out, waiting for more...';
+              sleep 1;
+              ;;
+            *\"no message received\"*)
+              echo 'No CDC message available right now. Waiting for more...';
+              sleep 1;
+              ;;
+            *)
+              printf '%s' \"$$normalized_output\" | while IFS= read -r line || [ -n \"$$line\" ]; do
+                [ \"$$line\" = \"Terminated\" ] && continue;
+                printf 'CDC CLI ERROR: %s\n' \"$$line\" >&2;
+              done;
+              exit 1
+              ;;
+          esac;
+        done;
+      "
+    networks:
+      - nats-network
+
+  # Protocol Bridge Examples
+  # mqtt-subscriber:
+  #   build: .
+  #   depends_on:
+  #     nats:
+  #       condition: service_started
+  #   environment:
+  #     - MQTT_HOST=nats
+  #   command: uv run python -m src.mqtt_subscriber
+  #   networks:
+  #     - nats-network
+
+  # mqtt-publisher:
+  #   build: .
+  #   depends_on:
+  #     nats:
+  #       condition: service_started
+  #   environment:
+  #     - MQTT_HOST=nats
+  #   command: >
+  #     sh -c "
+  #       echo 'Waiting for MQTT subscriber...';
+  #       sleep 2;
+  #       uv run python -m src.mqtt_publisher
+  #     "
+  #   networks:
+  #     - nats-network
+
+  # websocket-subscriber:
+  #   build: .
+  #   depends_on:
+  #     nats:
+  #       condition: service_started
+  #   environment:
+  #     - WS_HOST=nats
+  #   command: uv run python -m src.websocket_subscriber
+  #   networks:
+  #     - nats-network
+
+  # websocket-publisher:
+  #   build: .
+  #   depends_on:
+  #     nats:
+  #       condition: service_started
+  #   environment:
+  #     - WS_HOST=nats
+  #   command: >
+  #     sh -c "
+  #       echo 'Waiting for WebSocket subscriber...';
+  #       sleep 2;
+  #       uv run python -m src.websocket_publisher
+  #     "
+  #   networks:
+  #     - nats-network
+
+volumes:
+  cdc-postgres-data:
+  debezium-data:
+
+networks:
+  nats-network:
+    driver: bridge

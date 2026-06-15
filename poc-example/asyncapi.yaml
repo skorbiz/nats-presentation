@@ -1,0 +1,234 @@
+asyncapi: 3.0.0
+info:
+  title: NATS POC API
+  version: 1.0.0
+  description: >
+    Demonstration of NATS messaging patterns including pub/sub, request-reply,
+    and JetStream.
+
+    This specification defines the messages, channels, and operations used in
+    the POC.
+  contact:
+    name: Mezcada Team
+    url: 'https://jensen-group.ghe.com/Mezcada/mezcada'
+servers:
+  development:
+    host: 'localhost:4222'
+    protocol: nats
+    description: Local NATS server for development
+  docker:
+    host: 'nats:4222'
+    protocol: nats
+    description: NATS server in Docker network
+channels:
+  demo.messages:
+    description: Simple pub/sub channel for demo messages
+    messages:
+      demoMessage:
+        $ref: '#/components/messages/DemoMessage'
+  demo.requests:
+    description: Request-reply channel for processing requests
+    messages:
+      request:
+        $ref: '#/components/messages/Request'
+      response:
+        $ref: '#/components/messages/Response'
+  demo.stream.data:
+    description: JetStream channel for persistent messages
+    messages:
+      streamMessage:
+        $ref: '#/components/messages/StreamMessage'
+operations:
+  publishDemoMessage:
+    action: send
+    channel:
+      $ref: '#/channels/demo.messages'
+    summary: Publish a demo message
+    description: Sends a simple text message to all subscribers
+    messages:
+      - $ref: '#/channels/demo.messages/messages/demoMessage'
+  subscribeDemoMessages:
+    action: receive
+    channel:
+      $ref: '#/channels/demo.messages'
+    summary: Subscribe to demo messages
+    description: Receive demo messages from all publishers
+    messages:
+      - $ref: '#/channels/demo.messages/messages/demoMessage'
+  sendRequest:
+    action: send
+    channel:
+      $ref: '#/channels/demo.requests'
+    summary: Send a request
+    description: Send a request and wait for a reply
+    messages:
+      - $ref: '#/channels/demo.requests/messages/request'
+  receiveRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/demo.requests'
+    summary: Receive and process requests
+    description: Listen for requests and send back responses
+    messages:
+      - $ref: '#/channels/demo.requests/messages/request'
+  publishStreamMessage:
+    action: send
+    channel:
+      $ref: '#/channels/demo.stream.data'
+    summary: Publish persistent message
+    description: Publish a message to the JetStream stream for persistent storage
+    messages:
+      - $ref: '#/channels/demo.stream.data/messages/streamMessage'
+  consumeStreamMessages:
+    action: receive
+    channel:
+      $ref: '#/channels/demo.stream.data'
+    summary: Consume persistent messages
+    description: Pull messages from the JetStream stream with durable consumer
+    messages:
+      - $ref: '#/channels/demo.stream.data/messages/streamMessage'
+components:
+  messages:
+    DemoMessage:
+      name: DemoMessage
+      title: Demo Message
+      summary: Simple text message for pub/sub demo
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/DemoMessagePayload'
+      examples:
+        - name: simpleMessage
+          summary: A simple demo message
+          payload:
+            text: Hello NATS - Message 1
+            timestamp: '2026-06-02T10:30:00Z'
+    Request:
+      name: Request
+      title: Request Message
+      summary: Request message expecting a reply
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/RequestPayload'
+      examples:
+        - name: simpleRequest
+          summary: A simple request
+          payload:
+            request_id: req-001
+            data: Request 1
+            timestamp: '2026-06-02T10:30:00Z'
+    Response:
+      name: Response
+      title: Response Message
+      summary: Response to a request
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ResponsePayload'
+      examples:
+        - name: simpleResponse
+          summary: A simple response
+          payload:
+            request_id: req-001
+            result: 'Processed: Request 1'
+            timestamp: '2026-06-02T10:30:01Z'
+    StreamMessage:
+      name: StreamMessage
+      title: JetStream Message
+      summary: Persistent message stored in JetStream
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/StreamMessagePayload'
+      examples:
+        - name: streamMessage
+          summary: A JetStream message
+          payload:
+            message_id: msg-001
+            data: JetStream message 1
+            metadata:
+              source: publisher-1
+              priority: normal
+            timestamp: '2026-06-02T10:30:00Z'
+  schemas:
+    DemoMessagePayload:
+      type: object
+      description: Payload for simple pub/sub messages
+      properties:
+        text:
+          type: string
+          description: The message text content
+        timestamp:
+          type: string
+          format: date-time
+          description: When the message was created
+      required:
+        - text
+        - timestamp
+    RequestPayload:
+      type: object
+      description: Payload for request messages
+      properties:
+        request_id:
+          type: string
+          description: Unique identifier for the request
+        data:
+          type: string
+          description: Request data to be processed
+        timestamp:
+          type: string
+          format: date-time
+          description: When the request was created
+      required:
+        - request_id
+        - data
+        - timestamp
+    ResponsePayload:
+      type: object
+      description: Payload for response messages
+      properties:
+        request_id:
+          type: string
+          description: ID of the request being responded to
+        result:
+          type: string
+          description: Processing result
+        timestamp:
+          type: string
+          format: date-time
+          description: When the response was created
+      required:
+        - request_id
+        - result
+        - timestamp
+    StreamMessagePayload:
+      type: object
+      description: Payload for JetStream persistent messages
+      properties:
+        message_id:
+          type: string
+          description: Unique identifier for the message
+        data:
+          type: string
+          description: Message data
+        metadata:
+          type: object
+          description: Additional metadata
+          properties:
+            source:
+              type: string
+              description: Source of the message
+            priority:
+              type: string
+              enum:
+                - low
+                - normal
+                - high
+              description: Message priority
+          required:
+            - source
+        timestamp:
+          type: string
+          format: date-time
+          description: When the message was created
+      required:
+        - message_id
+        - data
+        - timestamp

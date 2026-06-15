@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NATS WebSocket Client</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 0 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #333;
+        margin-top: 0;
+      }
+      .status {
+        padding: 12px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        font-weight: 500;
+      }
+      .status.disconnected {
+        background: #fee;
+        color: #c33;
+      }
+      .status.connected {
+        background: #efe;
+        color: #3c3;
+      }
+      button {
+        background: #0066cc;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        margin-right: 8px;
+      }
+      button:hover {
+        background: #0052a3;
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      #messages {
+        margin-top: 20px;
+        padding: 12px;
+        background: #f9f9f9;
+        border-radius: 4px;
+        min-height: 200px;
+        max-height: 400px;
+        overflow-y: auto;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+      }
+      .message {
+        padding: 8px;
+        margin-bottom: 8px;
+        background: white;
+        border-left: 3px solid #0066cc;
+        border-radius: 2px;
+      }
+      .timestamp {
+        color: #666;
+        font-size: 11px;
+      }
+      input {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        width: 300px;
+        font-size: 14px;
+      }
+      .input-group {
+        margin: 16px 0;
+      }
+      label {
+        display: block;
+        margin-bottom: 4px;
+        color: #666;
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 NATS WebSocket Client</h1>
+
+      <div
+        style="
+          background: #fffbea;
+          padding: 12px;
+          border-radius: 4px;
+          margin-bottom: 20px;
+          border-left: 4px solid #f59e0b;
+        "
+      >
+        <strong>💡 Dev Container Usage:</strong><br />
+        If you're running NATS in a dev container, check VS Code's "Ports" tab to see the forwarded URL.<br />
+        It might be <code>ws://localhost:8080</code> or a different port like <code>ws://localhost:xxxxx</code>.
+      </div>
+
+      <div id="status" class="status disconnected">Disconnected</div>
+
+      <div class="input-group">
+        <label for="serverUrl">NATS WebSocket URL:</label>
+        <input type="text" id="serverUrl" value="ws://localhost:8080" style="width: 400px" />
+      </div>
+
+      <div>
+        <button id="connectBtn">Connect to NATS</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+      </div>
+
+      <div class="input-group">
+        <label for="messageInput">Message to publish:</label>
+        <input type="text" id="messageInput" placeholder="Enter message text..." disabled />
+        <button id="publishBtn" disabled>Publish to demo.messages</button>
+      </div>
+
+      <h3>Received Messages:</h3>
+      <div id="messages"></div>
+    </div>
+
+    <!-- Using nats.ws from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/nats.ws@1.28.0/lib/nats.js"></script>
+
+    <script>
+      const statusEl = document.getElementById('status');
+      const connectBtn = document.getElementById('connectBtn');
+      const disconnectBtn = document.getElementById('disconnectBtn');
+      const publishBtn = document.getElementById('publishBtn');
+      const messageInput = document.getElementById('messageInput');
+      const serverUrl = document.getElementById('serverUrl');
+      const messagesEl = document.getElementById('messages');
+
+      let nc = null;
+      let subscription = null;
+
+      function updateStatus(connected) {
+        if (connected) {
+          statusEl.textContent = `✅ Connected to ${serverUrl.value}`;
+          statusEl.className = 'status connected';
+          connectBtn.disabled = true;
+          disconnectBtn.disabled = false;
+          publishBtn.disabled = false;
+          messageInput.disabled = false;
+          serverUrl.disabled = true;
+        } else {
+          statusEl.textContent = '❌ Disconnected';
+          statusEl.className = 'status disconnected';
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          publishBtn.disabled = true;
+          messageInput.disabled = true;
+          serverUrl.disabled = false;
+        }
+      }
+
+      function addMessage(subject, text, timestamp) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message';
+        msgDiv.innerHTML = `
+          <div><strong>Subject:</strong> ${subject}</div>
+          <div><strong>Text:</strong> ${text}</div>
+          <div class="timestamp">${new Date(timestamp).toLocaleString()}</div>
+        `;
+        messagesEl.insertBefore(msgDiv, messagesEl.firstChild);
+
+        // Keep only last 20 messages
+        while (messagesEl.children.length > 20) {
+          messagesEl.removeChild(messagesEl.lastChild);
+        }
+      }
+
+      async function connect() {
+        try {
+          // Connect to NATS via WebSocket
+          const url = serverUrl.value.trim();
+          if (!url) {
+            alert('Please enter a WebSocket URL');
+            return;
+          }
+
+          nc = await natsws.connect({
+            servers: [url],
+          });
+
+          console.log('Connected to NATS at', url);
+          updateStatus(true);
+
+          // Subscribe to demo.messages
+          subscription = nc.subscribe('demo.messages');
+
+          // Process messages in background
+          (async () => {
+            for await (const msg of subscription) {
+              try {
+                const payload = JSON.parse(new TextDecoder().decode(msg.data));
+                console.log('Received:', payload);
+                addMessage(msg.subject, payload.text, payload.timestamp || new Date().toISOString());
+              } catch (err) {
+                console.error('Failed to parse message:', err);
+              }
+            }
+          })();
+        } catch (err) {
+          console.error('Connection failed:', err);
+          alert('Failed to connect to NATS. Is the server running?');
+          updateStatus(false);
+        }
+      }
+
+      async function disconnect() {
+        if (nc) {
+          try {
+            if (subscription) {
+              subscription.unsubscribe();
+            }
+            await nc.drain();
+            await nc.close();
+          } catch (err) {
+            console.error('Disconnect error:', err);
+          }
+          nc = null;
+          subscription = null;
+          updateStatus(false);
+        }
+      }
+
+      async function publishMessage() {
+        if (!nc || !messageInput.value.trim()) {
+          return;
+        }
+
+        try {
+          const payload = {
+            text: messageInput.value.trim(),
+            timestamp: new Date().toISOString(),
+          };
+
+          nc.publish('demo.messages', JSON.stringify(payload));
+          console.log('Published:', payload);
+
+          messageInput.value = '';
+        } catch (err) {
+          console.error('Publish failed:', err);
+          alert('Failed to publish message');
+        }
+      }
+
+      // Event listeners
+      connectBtn.addEventListener('click', connect);
+      disconnectBtn.addEventListener('click', disconnect);
+      publishBtn.addEventListener('click', publishMessage);
+      messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          publishMessage();
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+FROM nats:latest
+
+# Copy NATS configuration
+COPY nats.conf /nats.conf
+
+# Default command uses the config
+CMD ["-c", "/nats.conf"]

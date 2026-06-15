@@ -76,6 +76,7 @@ WORKDIR /home/dev
 ARG COPILOT_VERSION=latest
 RUN curl -fsSL https://gh.io/copilot-install | VERSION=${COPILOT_VERSION} bash
 
+RUN curl -fsSL https://binaries.nats.dev/nats-io/nats-server/v2@v2.11.6 | sh
 
 # Cleanup
 RUN rm -rf /root/.cache/pip/*. \
