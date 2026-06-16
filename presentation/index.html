@@ -333,6 +333,34 @@
             </textarea>
           </section>
 
+          <section>
+          <h2>Multiple Consumers</h2>
+          <div class="mermaid">
+            graph LR
+              P[Publisher]
+              S[Subject: orders.*]
+              ST[Stream: ORDERS]
+              C1[Consumer: billing]
+              C2[Consumer: analytics]
+              C3[Consumer: audit]
+              
+              P -->|Publish| S
+              S -->|Match & Store| ST
+              ST -->|Replay from start| C1
+              ST -->|Only new| C2
+              ST -->|Last 7 days| C3
+              
+              style P fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
+              style S fill:#fab387,stroke:#cdd6f4,color:#1e1e2e
+              style ST fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
+              style C1 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+              style C2 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+              style C3 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
+          </div>
+          <p style="font-size: 0.8em; margin-top: 1em;">Multiple consumers with different replay policies from same stream</p>
+        </section>
+
+
           <section data-markdown>
             <textarea data-template>
               ## Acknowledgment Modes
@@ -364,34 +392,6 @@
               ```
             </textarea>
           </section>
-
-
-          <section>
-          <h2>Queue Groups with JetStream</h2>
-          <div class="mermaid">
-            graph LR
-              P[Publisher]
-              S[Subject: orders.*]
-              ST[Stream: ORDERS]
-              C1[Consumer: billing]
-              C2[Consumer: analytics]
-              C3[Consumer: audit]
-              
-              P -->|Publish| S
-              S -->|Match & Store| ST
-              ST -->|Replay from start| C1
-              ST -->|Only new| C2
-              ST -->|Last 7 days| C3
-              
-              style P fill:#f5c2e7,stroke:#cdd6f4,color:#1e1e2e
-              style S fill:#fab387,stroke:#cdd6f4,color:#1e1e2e
-              style ST fill:#89b4fa,stroke:#cdd6f4,color:#1e1e2e
-              style C1 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
-              style C2 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
-              style C3 fill:#a6e3a1,stroke:#cdd6f4,color:#1e1e2e
-          </div>
-          <p style="font-size: 0.8em; margin-top: 1em;">Multiple consumers with different replay policies from same stream</p>
-        </section>
 
         </section>
 
