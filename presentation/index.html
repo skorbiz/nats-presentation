@@ -518,8 +518,22 @@
             <textarea data-template>
               ## JetStream Cluster
               
-              - Persistent streams can be replicated with Raft
-              - A 3-node cluster needs quorum (at least 2 nodes available) to keep writing
+              - Persistent streams can be replicated with Raft consensus
+              - Each stream has a **leader** (elected via Raft)
+              
+              **Writes (Publishing):**
+              - Must go through the stream leader
+              - Require **quorum acknowledgment** (majority of replicas)
+              - 3-node cluster: at least 2 nodes must ack before write commits
+              
+              **Reads (Consuming):**
+              - Can be served from **any replica** (leader or followers)
+              - Don't require quorum
+              - Better read scalability
+              
+              **Availability:**
+              - Leader failure → automatic re-election (needs quorum)
+              - Losing quorum stops writes but reads continue
             </textarea>
           </section>
 
@@ -585,6 +599,13 @@
                         
             - Connect remote/edge NATS deployments into a larger system
             - Maintains local operation capability
+            
+            **Configuration:**
+            - **Hub-spoke topology** (not peer-to-peer like clusters)
+            - Leaf uses `leafnodes.remotes` to connect to central cluster
+            - Central cluster uses `leafnodes.listen` to accept connections
+            - Can filter subjects (unlike clusters that share everything)
+            - Leaf can operate offline if connection to hub is lost
           </textarea
             >
           </section>
@@ -711,15 +732,11 @@
             <textarea data-template>
               ## Monitoring & Observability
               
-              **Built-in:**
+              **Built-in Monitoring:**
               - HTTP monitoring endpoints (`/varz`, `/connz`, `/subsz`)
               - Prometheus metrics exporter
               - System events and advisories
               
-              **OpenTelemetry Compliant:**
-              - Native OTEL tracing support
-              - Integrates with Jaeger, Zipkin, etc.
-              - Distributed tracing across services
               
               ```bash
               nats server report jetstream
